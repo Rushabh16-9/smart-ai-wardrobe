@@ -156,10 +156,12 @@ export function AddItemForm() {
       setProgress(100);
       setProgressLabel('Done!');
       setStep('review');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(`Processing failed: ${err.message || String(err)}`);
-      setErrorStack(err.stack || String(err));
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorStack = err instanceof Error ? err.stack : String(err);
+      toast.error(`Processing failed: ${errorMsg}`);
+      setErrorStack(errorStack || String(err));
       setStep('input');
       setPreviewUrl(null);
     }

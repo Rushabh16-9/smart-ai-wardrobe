@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGeminiModel } from '@/lib/gemini';
-import { AICategorizationResult } from '@/types/wardrobe';
 
 const BATCH_CATEGORIZATION_PROMPT = `You are a professional fashion analyst AI. Analyze the following clothing items in the provided images and return ONLY a strict JSON object with no markdown, no explanation, no code fences.
 
@@ -74,9 +73,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure season is an array for each item
-    data.results.forEach((cat: any) => {
+    data.results.forEach((cat: { season?: string | string[] }) => {
       if (!Array.isArray(cat.season)) {
-        cat.season = cat.season ? [cat.season] : [];
+        cat.season = cat.season ? [cat.season as string] : [];
       }
     });
 

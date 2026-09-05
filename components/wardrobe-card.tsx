@@ -73,9 +73,10 @@ export function WardrobeCard({ item }: WardrobeCardProps) {
 
       toast.success('Photo enhanced! ✨', { id: 'enhance' });
       window.location.reload(); 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Failed to enhance photo', { id: 'enhance' });
+      const msg = err instanceof Error ? err.message : 'Failed to enhance photo';
+      toast.error(msg, { id: 'enhance' });
     } finally {
       setEnhancing(false);
     }
@@ -88,11 +89,11 @@ export function WardrobeCard({ item }: WardrobeCardProps) {
       {...tilt}
       style={{ ...tilt.style, transformStyle: 'preserve-3d' }}
       className="group relative w-full backdrop-blur-md bg-gradient-to-b from-zinc-800/80 to-zinc-900 rounded-2xl overflow-hidden border border-white/5 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:border-white/10"
-      onMouseEnter={(e) => {
+      onMouseEnter={() => {
         tilt.onMouseEnter();
         setShowActions(true);
       }}
-      onMouseLeave={(e) => {
+      onMouseLeave={() => {
         tilt.onMouseLeave();
         setShowActions(false);
       }}

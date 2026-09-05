@@ -19,7 +19,6 @@ export async function enhanceImage(imageUrl: string): Promise<Blob> {
 
       // Apply convolution matrix (Sharpening kernel)
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
       const w = canvas.width;
       const h = canvas.height;
 

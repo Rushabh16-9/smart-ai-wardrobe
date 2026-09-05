@@ -170,7 +170,7 @@ export function BulkUploadForm() {
           throw new Error(catData.error || 'Failed to categorize batch');
         }
         categories = catData.results;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Batch categorization error', error);
         successfulBgs.forEach(s => updateItem(s.item.id, { status: 'error', error: 'Categorization failed' }));
         continue;
@@ -215,7 +215,7 @@ export function BulkUploadForm() {
             result: category 
           });
 
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error(`Failed to upload ${s.item.id}`, error);
           updateItem(s.item.id, { status: 'error', error: 'Upload failed' });
         }
