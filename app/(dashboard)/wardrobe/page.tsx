@@ -51,12 +51,12 @@ export default async function WardrobePage() {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="glass-card rounded-xl p-4 border border-border">
+        <div className="bg-zinc-900/50 backdrop-blur-sm border border-white/5 rounded-xl p-4 hover:bg-zinc-900/80 transition-colors">
           <CountUp end={totalItems} duration={600} className="text-2xl font-bold text-foreground block" />
           <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">Total Items</p>
         </div>
         {topCategories.map(([type, count]) => (
-          <div key={type} className="glass-card rounded-xl p-4 border border-border">
+          <div key={type} className="bg-zinc-900/50 backdrop-blur-sm border border-white/5 rounded-xl p-4 hover:bg-zinc-900/80 transition-colors">
             <CountUp end={count} duration={600} className="text-2xl font-bold text-foreground block" />
             <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">{type}</p>
           </div>

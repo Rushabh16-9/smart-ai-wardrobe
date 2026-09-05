@@ -28,11 +28,11 @@ export function HistoryList({ history }: { history: WearHistory[] }) {
   }
 
   return (
-    <div className="w-full space-y-4 stagger-children">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full stagger-children">
       {history.map((entry) => (
         <Dialog key={entry.id}>
           <DialogTrigger asChild>
-            <div style={{ width: '100%' }} className="block backdrop-blur-md bg-white/5 border border-white/10 rounded-xl p-5 card-hover cursor-pointer text-left transition-all hover:bg-white/10">
+            <div className="bg-zinc-900/70 border border-white/5 rounded-xl p-5 hover:border-white/15 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer block text-left">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="font-semibold text-foreground capitalize">{entry.occasion ?? 'Outfit'}</p>
@@ -52,9 +52,29 @@ export function HistoryList({ history }: { history: WearHistory[] }) {
               {entry.notes && (
                 <p className="text-sm text-muted-foreground mt-2 italic">&ldquo;{entry.notes}&rdquo;</p>
               )}
+
+              {/* Mini Thumbnails */}
+              {entry.ai_suggestion?.items && entry.ai_suggestion.items.length > 0 && (
+                <div className="flex -space-x-3 mt-4">
+                  {entry.ai_suggestion.items.slice(0, 4).map((item, i) => (
+                    item.image_url ? (
+                      <div key={item.id || i} className="w-10 h-10 rounded-full border-2 border-zinc-900 object-cover bg-zinc-800 overflow-hidden relative">
+                         <Image src={item.image_url} alt="thumbnail" fill className="object-cover" />
+                      </div>
+                    ) : (
+                      <div key={item.id || i} className="w-10 h-10 rounded-full border-2 border-zinc-900 bg-zinc-800 flex items-center justify-center text-xs text-muted-foreground">◈</div>
+                    )
+                  ))}
+                  {entry.ai_suggestion.items.length > 4 && (
+                     <div className="w-10 h-10 rounded-full border-2 border-zinc-900 bg-zinc-800 flex items-center justify-center text-xs text-muted-foreground font-medium relative z-10">
+                        +{entry.ai_suggestion.items.length - 4}
+                     </div>
+                  )}
+                </div>
+              )}
             </div>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl bg-background border-border overflow-y-auto max-h-[85vh]">
+          <DialogContent className="bg-zinc-950 border border-white/10 rounded-2xl max-w-lg w-full shadow-2xl p-6 overflow-y-auto max-h-[85vh]">
             <DialogHeader>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-primary text-sm">✦</span>
@@ -124,14 +144,17 @@ export function HistoryList({ history }: { history: WearHistory[] }) {
                   <h3 className="text-xs uppercase tracking-widest text-muted-foreground/60 mb-3">
                     ✦ Complete the Look
                   </h3>
-                  <div className="bg-primary/5 border border-primary/15 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge className="bg-primary/15 text-primary border-primary/20 text-xs">
-                        Shop this
+                  <div className="bg-gradient-to-r from-amber-500/10 to-transparent border border-[#d4af37]/30 rounded-xl p-4 mt-6">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30 text-xs font-medium">
+                        ✦ AI Recommendation
                       </Badge>
+                    </div>
+                    <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-semibold text-foreground">
                         {entry.ai_suggestion.buy_suggestion.type} — {entry.ai_suggestion.buy_suggestion.color}
                       </span>
+                      <span className="text-[#d4af37] text-lg leading-none cursor-pointer hover:scale-110 transition-transform">🛍️</span>
                     </div>
                     <p className="text-sm text-muted-foreground">{entry.ai_suggestion.buy_suggestion.description}</p>
                   </div>

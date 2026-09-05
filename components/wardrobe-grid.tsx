@@ -72,10 +72,10 @@ export function WardrobeGrid({ items }: WardrobeGridProps) {
               id={`filter-${f.toLowerCase().replace(' ', '-')}`}
               onClick={() => setFormalityFilter(f)}
               className={cn(
-                'px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-200',
+                'px-3 py-1.5 rounded-full text-xs border transition-all duration-200',
                 formalityFilter === f
-                  ? 'bg-primary/15 text-primary border-primary/30 shadow-[0_0_10px_rgba(201,169,110,0.15)]'
-                  : 'text-muted-foreground border-border hover:border-primary/30 hover:text-foreground bg-transparent'
+                  ? 'bg-[#d4af37] text-black font-medium border-[#d4af37]'
+                  : 'text-muted-foreground border-border hover:bg-zinc-800 transition-colors hover:text-foreground bg-transparent'
               )}
             >
               {f}
@@ -117,9 +117,9 @@ export function WardrobeGrid({ items }: WardrobeGridProps) {
           <p className="text-sm">No items match your filters.</p>
         </div>
       ) : (
-        <div className="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4 stagger-children space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 stagger-children">
           {filtered.map((item) => (
-            <div key={item.id} className="break-inside-avoid">
+            <div key={item.id}>
               <WardrobeCard item={item} />
             </div>
           ))}

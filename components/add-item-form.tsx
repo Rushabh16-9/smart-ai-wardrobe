@@ -104,7 +104,7 @@ export function AddItemForm() {
     try {
       // Step 1: Remove background
       setProgress(20);
-      setProgressLabel('Removing background (this may take a moment on first run)…');
+      setProgressLabel('Stripping background...');
 
       const { removeBackground } = await import('@imgly/background-removal');
         
@@ -119,7 +119,7 @@ export function AddItemForm() {
       });
 
       setProgress(80);
-      setProgressLabel('Background removed! Running AI categorization…');
+      setProgressLabel('Gemini is analyzing texture and color...');
       setProcessedBlob(resultBlob);
 
       // Update preview with transparent background
@@ -229,7 +229,7 @@ export function AddItemForm() {
 
   if (step === 'processing') {
     return (
-      <div className="glass-card rounded-2xl p-8 border border-border">
+      <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/50">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-full bg-zinc-900/50 border border-zinc-800 flex items-center justify-center mx-auto mb-4">
             <div className="w-6 h-6 rounded-full border-2 border-zinc-700 border-t-zinc-300 animate-spin" />
@@ -253,7 +253,7 @@ export function AddItemForm() {
 
   if (step === 'review') {
     return (
-      <div className="glass-card rounded-2xl p-6 border border-border fade-in">
+      <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl shadow-black/50 fade-in">
         <div className="flex items-center gap-3 mb-6">
           <span className="text-primary text-xl">✦</span>
           <h2 className="text-xl font-semibold text-foreground">AI Categorization Result</h2>
@@ -324,14 +324,14 @@ export function AddItemForm() {
 
   // INPUT step
   return (
-    <div className="glass-card rounded-2xl p-6 border border-border">
+    <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl shadow-black/50">
       <Tabs defaultValue="upload" className="w-full">
-        <TabsList className="grid grid-cols-2 mb-6 bg-secondary/50">
-          <TabsTrigger id="tab-upload" value="upload" className="data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
-            📁 Upload Image
+        <TabsList className="grid grid-cols-2 mb-8 bg-zinc-950/50 p-1 rounded-xl border border-white/5">
+          <TabsTrigger id="tab-upload" value="upload" className="rounded-lg py-2.5 data-[state=active]:bg-[#d4af37] data-[state=active]:text-black data-[state=active]:shadow-md font-medium text-muted-foreground transition-all">
+            Upload Image
           </TabsTrigger>
-          <TabsTrigger id="tab-url" value="url" className="data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
-            🔗 Product URL
+          <TabsTrigger id="tab-url" value="url" className="rounded-lg py-2.5 data-[state=active]:bg-[#d4af37] data-[state=active]:text-black data-[state=active]:shadow-md font-medium text-muted-foreground transition-all">
+            Product URL
           </TabsTrigger>
         </TabsList>
 
@@ -345,7 +345,7 @@ export function AddItemForm() {
             className={cn(
               'border-2 rounded-xl p-12 text-center cursor-pointer transition-all duration-300',
               isDragging
-                ? 'border-solid border-zinc-400 bg-zinc-900/50 shadow-[0_0_20px_rgba(255,255,255,0.05)]'
+                ? 'border-solid border-[#d4af37] bg-zinc-800/50 shadow-[0_0_20px_rgba(212,175,55,0.15)]'
                 : 'border-dashed border-zinc-700 hover:border-zinc-500 hover:bg-zinc-900/30'
             )}
           >

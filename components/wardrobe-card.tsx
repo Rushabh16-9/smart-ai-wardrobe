@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useTilt } from '@/hooks/use-tilt';
+import { enhanceImage } from '@/lib/enhance-image';
 
 interface WardrobeCardProps {
   item: WardrobeItem;
@@ -24,6 +25,7 @@ const FORMALITY_COLORS: Record<string, string> = {
 
 export function WardrobeCard({ item }: WardrobeCardProps) {
   const [deleting, setDeleting] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const supabase = createClient();
 
@@ -40,13 +42,52 @@ export function WardrobeCard({ item }: WardrobeCardProps) {
     setDeleting(false);
   }
 
+  async function handleEnhance(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!item.image_url) return;
+    setEnhancing(true);
+    try {
+      toast.loading('Enhancing photo...', { id: 'enhance' });
+      const enhancedBlob = await enhanceImage(item.image_url);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const fileName = `${user.id}/enhanced_${Date.now()}.png`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('wardrobe-images')
+        .upload(fileName, enhancedBlob, { contentType: 'image/png' });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('wardrobe-images')
+        .getPublicUrl(uploadData.path);
+
+      const { error: dbError } = await supabase
+        .from('wardrobe_items')
+        .update({ image_url: publicUrl })
+        .eq('id', item.id);
+
+      if (dbError) throw dbError;
+
+      toast.success('Photo enhanced! ✨', { id: 'enhance' });
+      window.location.reload(); 
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || 'Failed to enhance photo', { id: 'enhance' });
+    } finally {
+      setEnhancing(false);
+    }
+  }
+
   const tilt = useTilt({ scale: 1.05, maxRotation: 8 });
 
   return (
     <div
       {...tilt}
       style={{ ...tilt.style, transformStyle: 'preserve-3d' }}
-      className="group relative backdrop-blur-md bg-white/5 rounded-2xl overflow-hidden border border-white/10 card-hover cursor-pointer"
+      className="group relative w-full backdrop-blur-md bg-gradient-to-b from-zinc-800/80 to-zinc-900 rounded-2xl overflow-hidden border border-white/5 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:border-white/10"
       onMouseEnter={(e) => {
         tilt.onMouseEnter();
         setShowActions(true);
@@ -57,13 +98,13 @@ export function WardrobeCard({ item }: WardrobeCardProps) {
       }}
     >
       {/* Image */}
-      <div className="relative aspect-[3/4] bg-zinc-900/80 border-b border-white/5 overflow-hidden" style={{ transform: 'translateZ(20px)' }}>
+      <div className="relative w-full aspect-[3/4] bg-zinc-900/80 border-b border-white/5 overflow-hidden" style={{ transform: 'translateZ(20px)' }}>
         {item.image_url ? (
           <Image
             src={item.image_url}
             alt={`${item.color ?? ''} ${item.type ?? 'clothing item'}`}
             fill
-            className="object-contain p-2 hover:scale-105 transition-transform duration-300 group-hover:scale-105"
+            className="object-contain p-2 transition-transform duration-500 group-hover:scale-110"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
           />
         ) : (
@@ -75,10 +116,20 @@ export function WardrobeCard({ item }: WardrobeCardProps) {
         {/* Hover overlay with actions */}
         <div
           className={cn(
-            'absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center transition-all duration-300',
+            'absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center gap-3 transition-all duration-300',
             showActions ? 'opacity-100' : 'opacity-0 pointer-events-none'
           )}
         >
+          {item.image_url && (
+             <button
+               id={`enhance-item-${item.id}`}
+               onClick={handleEnhance}
+               disabled={enhancing || deleting}
+               className="px-4 py-2 text-xs font-medium rounded-lg bg-[#d4af37]/20 text-[#d4af37] border border-[#d4af37]/30 hover:bg-[#d4af37]/30 transition-colors"
+             >
+               {enhancing ? '✨ Enhancing…' : '✨ Enhance'}
+             </button>
+          )}
           <button
             id={`delete-item-${item.id}`}
             onClick={handleDelete}

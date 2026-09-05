@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getGeminiModel } from '@/lib/gemini';
 import { OutfitSuggestion, WardrobeItem } from '@/types/wardrobe';
 
-function buildStylistPrompt(occasion: string, wardrobe: WardrobeItem[]): string {
+function buildStylistPrompt(occasion: string, weather: string, wardrobe: WardrobeItem[]): string {
   const itemDescriptions = wardrobe.map((item, i) => {
     const parts = [
       `Item ${i + 1} (id: ${item.id}):`,
@@ -22,7 +22,7 @@ The user's wardrobe items:
 ${itemDescriptions}
 
 The occasion: "${occasion}"
-
+${weather ? `The weather/location: "${weather}"\n` : ''}
 Create the perfect outfit for this occasion using ONLY items from the wardrobe above. Return ONLY a strict JSON object (no markdown, no code fences) matching this exact shape:
 
 {
@@ -50,6 +50,7 @@ Rules:
 - Select 2–4 items that work together harmoniously
 - Prioritize items with matching formality level for the occasion
 - Consider color coordination and contrast
+- Ensure the items are appropriate for the specified weather/location context if provided
 - styling_tips should be actionable and specific
 - buy_suggestion should fill a gap in the outfit (e.g. missing shoes, accessory, or layering piece)
 - If wardrobe is empty, still return the JSON shape with empty items array and a helpful buy_suggestion`;
@@ -57,7 +58,7 @@ Rules:
 
 export async function POST(request: NextRequest) {
   try {
-    const { occasion } = await request.json();
+    const { occasion, weather } = await request.json();
 
     if (!occasion || typeof occasion !== 'string') {
       return NextResponse.json({ error: 'occasion is required' }, { status: 400 });
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     const model = getGeminiModel('gemini-3.6-flash');
-    const prompt = buildStylistPrompt(occasion, wardrobe ?? []);
+    const prompt = buildStylistPrompt(occasion, weather || '', wardrobe ?? []);
 
     const result = await model.generateContent(prompt);
     const rawText = result.response.text().trim();
