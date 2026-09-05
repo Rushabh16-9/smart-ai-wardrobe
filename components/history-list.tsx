@@ -31,9 +31,8 @@ export function HistoryList({ history }: { history: WearHistory[] }) {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full stagger-children">
       {history.map((entry) => (
         <Dialog key={entry.id}>
-          <DialogTrigger asChild>
-            <div className="bg-zinc-900/70 border border-white/5 rounded-xl p-5 hover:border-white/15 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer block text-left">
-              <div className="flex items-center justify-between mb-3">
+          <DialogTrigger className="bg-zinc-900/70 border border-white/5 rounded-xl p-5 hover:border-white/15 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer block text-left w-full">
+            <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="font-semibold text-foreground capitalize">{entry.occasion ?? 'Outfit'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -72,7 +71,6 @@ export function HistoryList({ history }: { history: WearHistory[] }) {
                   )}
                 </div>
               )}
-            </div>
           </DialogTrigger>
           <DialogContent className="bg-zinc-950 border border-white/10 rounded-2xl max-w-lg w-full shadow-2xl p-6 overflow-y-auto max-h-[85vh]">
             <DialogHeader>
