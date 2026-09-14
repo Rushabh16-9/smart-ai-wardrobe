@@ -8,19 +8,42 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { AICategorizationResult } from '@/types/wardrobe';
 import { cn } from '@/lib/utils';
+import { BulkUploadForm } from './bulk-upload-form';
+import {
+  Upload,
+  Link as LinkIcon,
+  Sparkles,
+  CheckCircle2,
+  Image as ImageIcon,
+  Tag,
+  Palette,
+  Sun,
+  Briefcase,
+  RotateCcw,
+  ShieldCheck,
+  Scissors,
+  ArrowRight,
+  Globe,
+  Loader2,
+  Layers
+} from 'lucide-react';
 
+type MainTab = 'photo' | 'link' | 'bulk';
 type Step = 'input' | 'processing' | 'review' | 'done';
+
+const STORE_SUGGESTIONS = ['Zara', 'H&M', 'ASOS', 'Uniqlo', 'Nordstrom', 'Nike', 'Adidas'];
+const AVAILABLE_SEASONS = ['Spring', 'Summer', 'Fall', 'Winter'];
 
 export function AddItemForm() {
   const router = useRouter();
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [activeTab, setActiveTab] = useState<MainTab>('photo');
   const [step, setStep] = useState<Step>('input');
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
@@ -51,7 +74,7 @@ export function AddItemForm() {
     if (file && file.type.startsWith('image/')) {
       processFile(file);
     } else {
-      toast.error('Please drop an image file');
+      toast.error('Please drop an image file (PNG, JPG, WEBP)');
     }
   }
 
@@ -75,10 +98,9 @@ export function AddItemForm() {
         toast.error(data.error ?? 'Could not extract image from URL');
         return;
       }
-      // Fetch the image as blob via our proxy
       const imgRes = await fetch(`/api/proxy-image?url=${encodeURIComponent(data.imageUrl)}`);
       if (!imgRes.ok) {
-        toast.error('Failed to download image from URL');
+        toast.error('Failed to download image from product URL');
         return;
       }
       const blob = await imgRes.blob();
@@ -95,39 +117,34 @@ export function AddItemForm() {
   async function processFile(file: File) {
     setStep('processing');
     setProgress(10);
-    setProgressLabel('Loading image…');
+    setProgressLabel('Loading image into Vestire Studio…');
 
-    // Show original preview
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
 
     try {
-      // Step 1: Remove background
-      setProgress(20);
-      setProgressLabel('Stripping background...');
+      setProgress(25);
+      setProgressLabel('AI removing background layer...');
 
       const { removeBackground } = await import('@imgly/background-removal');
-        
+
       const resultBlob = await removeBackground(file, {
         publicPath: 'https://unpkg.com/@imgly/background-removal-data@1.4.3/dist/',
         progress: (key: string, current: number, total: number) => {
           if (total > 0) {
-            const pct = Math.round((current / total) * 60) + 20;
-            setProgress(Math.min(pct, 79));
+            const pct = Math.round((current / total) * 55) + 20;
+            setProgress(Math.min(pct, 78));
           }
         },
       });
 
       setProgress(80);
-      setProgressLabel('Gemini is analyzing texture and color...');
+      setProgressLabel('Gemini AI analyzing fabric, color & style...');
       setProcessedBlob(resultBlob);
 
-      // Update preview with transparent background
       const processedUrl = URL.createObjectURL(resultBlob);
       setPreviewUrl(processedUrl);
 
-      // Step 2: Categorize with Gemini
-      // Convert blob to base64 (Browser compatible)
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -147,27 +164,27 @@ export function AddItemForm() {
       const catData = await catRes.json();
 
       if (!catRes.ok || catData.error) {
-        toast.error('AI categorization failed — you can fill details manually');
+        toast.error('AI categorization complete — feel free to tweak tags manually');
         setCategorization({ type: '', color: '', pattern: '', season: [], formality: '' });
       } else {
         setCategorization(catData);
       }
 
       setProgress(100);
-      setProgressLabel('Done!');
+      setProgressLabel('Complete!');
       setStep('review');
     } catch (err: unknown) {
       console.error(err);
       const errorMsg = err instanceof Error ? err.message : String(err);
-      const errorStack = err instanceof Error ? err.stack : String(err);
+      const stack = err instanceof Error ? err.stack : String(err);
       toast.error(`Processing failed: ${errorMsg}`);
-      setErrorStack(errorStack || String(err));
+      setErrorStack(stack || String(err));
       setStep('input');
       setPreviewUrl(null);
     }
   }
 
-  // ── Upload to Supabase ───────────────────────────────────
+  // ── Save to Supabase ───────────────────────────────────
   async function handleSave() {
     if (!processedBlob || !categorization) return;
     setSaving(true);
@@ -176,7 +193,6 @@ export function AddItemForm() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Upload image
       const fileName = `${user.id}/${Date.now()}.png`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('wardrobe-images')
@@ -184,12 +200,10 @@ export function AddItemForm() {
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('wardrobe-images')
         .getPublicUrl(uploadData.path);
 
-      // Insert into DB
       const { error: dbError } = await supabase.from('wardrobe_items').insert({
         user_id: user.id,
         image_url: publicUrl,
@@ -203,15 +217,24 @@ export function AddItemForm() {
 
       if (dbError) throw dbError;
 
-      toast.success('Item added to your wardrobe! 🎉');
+      toast.success('Item saved to your AI Wardrobe! ✨');
       setStep('done');
-      setTimeout(() => router.push('/wardrobe'), 1200);
+      setTimeout(() => router.push('/wardrobe'), 1000);
     } catch (err: unknown) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : 'Failed to save item');
     } finally {
       setSaving(false);
     }
+  }
+
+  function toggleSeason(seasonName: string) {
+    if (!categorization) return;
+    const current = categorization.season ?? [];
+    const updated = current.includes(seasonName)
+      ? current.filter((s) => s !== seasonName)
+      : [...current, seasonName];
+    setCategorization({ ...categorization, season: updated });
   }
 
   function handleReset() {
@@ -226,129 +249,277 @@ export function AddItemForm() {
   }
 
   // ─────────────────────────────────────────────────────────
-  // RENDER
+  // RENDER: Processing State
   // ─────────────────────────────────────────────────────────
-
   if (step === 'processing') {
     return (
-      <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/50">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-full bg-zinc-900/50 border border-zinc-800 flex items-center justify-center mx-auto mb-4">
-            <div className="w-6 h-6 rounded-full border-2 border-zinc-700 border-t-zinc-300 animate-spin" />
-          </div>
-          <h2 className="text-xl font-semibold text-foreground mb-2">Processing your item</h2>
-          <p className="text-sm text-muted-foreground">{progressLabel}</p>
+      <div className="glass-card rounded-3xl p-8 sm:p-12 border border-white/10 shadow-2xl backdrop-blur-2xl text-center space-y-8 max-w-2xl w-full mx-auto relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent animate-pulse" />
+
+        {/* Animated Scanner Visual */}
+        <div className="relative w-44 h-56 mx-auto rounded-2xl overflow-hidden bg-zinc-950 border border-white/10 shadow-2xl flex items-center justify-center">
+          {previewUrl ? (
+            <>
+              <Image src={previewUrl} alt="Processing item" fill className="object-contain p-3 opacity-80" />
+              <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent shadow-[0_0_15px_#d4af37] animate-[bounce_2s_infinite]" />
+            </>
+          ) : (
+            <Loader2 className="w-8 h-8 text-[#d4af37] animate-spin" />
+          )}
         </div>
 
-        {previewUrl && (
-          <div className="relative w-48 h-64 mx-auto mb-8 rounded-xl overflow-hidden bg-zinc-900/50 border border-zinc-800">
-            <Image src={previewUrl} alt="Processing preview" fill className="object-contain p-2 opacity-50" />
-            <div className="absolute inset-0 animate-pulse bg-zinc-800/20" />
-          </div>
-        )}
+        <div className="space-y-2 max-w-md mx-auto">
+          <h2 className="text-2xl font-bold text-foreground font-serif">AI Magic in Progress</h2>
+          <p className="text-xs sm:text-sm text-muted-foreground flex items-center justify-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#d4af37] animate-spin" />
+            <span>{progressLabel}</span>
+          </p>
+        </div>
 
-        <Progress value={progress} className="h-1.5 bg-secondary [&>div]:bg-primary" />
-        <p className="text-center text-xs text-muted-foreground mt-3">{progress}%</p>
+        <div className="max-w-md mx-auto space-y-2">
+          <Progress value={progress} className="h-2 bg-zinc-950 border border-white/10 rounded-full [&>div]:bg-gradient-to-r [&>div]:from-[#8a6e3c] [&>div]:to-[#d4af37]" />
+          <div className="flex justify-between text-xs text-muted-foreground font-mono">
+            <span>Stage {progress < 40 ? '1/3' : progress < 80 ? '2/3' : '3/3'}</span>
+            <span className="text-[#d4af37] font-semibold">{progress}%</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 max-w-md mx-auto pt-2 text-xs font-medium">
+          <div className={cn("p-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all", progress >= 25 ? "bg-primary/10 border-primary/30 text-[#d4af37]" : "bg-zinc-950/40 border-white/5 text-zinc-500")}>
+            <Scissors className="w-3.5 h-3.5" />
+            <span>Bg Removal</span>
+          </div>
+          <div className={cn("p-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all", progress >= 75 ? "bg-primary/10 border-primary/30 text-[#d4af37]" : "bg-zinc-950/40 border-white/5 text-zinc-500")}>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Gemini AI</span>
+          </div>
+          <div className={cn("p-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all", progress >= 100 ? "bg-primary/10 border-primary/30 text-[#d4af37]" : "bg-zinc-950/40 border-white/5 text-zinc-500")}>
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Ready</span>
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (step === 'review') {
+  // ─────────────────────────────────────────────────────────
+  // RENDER: Review State
+  // ─────────────────────────────────────────────────────────
+  if (step === 'review' || step === 'done') {
     return (
-      <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl shadow-black/50 fade-in">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-primary text-xl">✦</span>
-          <h2 className="text-xl font-semibold text-foreground">AI Categorization Result</h2>
+      <div className="glass-card rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl backdrop-blur-2xl space-y-6 max-w-2xl w-full mx-auto fade-in">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center text-[#d4af37]">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-foreground font-serif">AI Categorization Result</h2>
+              <p className="text-xs text-muted-foreground">Review or edit the auto-detected item details</p>
+            </div>
+          </div>
+          <Badge className="bg-[#d4af37]/10 text-[#d4af37] border-[#d4af37]/30 px-3 py-1 text-[10px] uppercase font-semibold">
+            ✦ Background Removed
+          </Badge>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-          {/* Preview */}
-          <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-gradient-to-br from-secondary/40 to-secondary/20 border border-border">
+        {/* Center Top Image Display */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="relative w-48 h-60 rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:14px_14px] bg-zinc-950 flex items-center justify-center">
             {previewUrl && (
               <Image src={previewUrl} alt="Processed item" fill className="object-contain p-4" />
             )}
-            <div className="absolute top-2 right-2">
-              <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px]">
-                BG Removed
-              </Badge>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleReset}
+            className="text-xs text-muted-foreground hover:text-white flex items-center gap-1.5 h-8"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Upload Different Image</span>
+          </Button>
+        </div>
+
+        {/* Category Inputs Grid */}
+        {categorization && (
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-[#d4af37]" />
+                  <span>Category / Type</span>
+                </Label>
+                <Input
+                  value={categorization.type || ''}
+                  onChange={(e) => setCategorization({ ...categorization, type: e.target.value })}
+                  placeholder="e.g. Jacket, Sneakers, Shirt"
+                  className="bg-zinc-950/80 border-white/10 focus:border-[#d4af37] text-foreground h-10 rounded-xl text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5 text-[#d4af37]" />
+                  <span>Primary Color</span>
+                </Label>
+                <Input
+                  value={categorization.color || ''}
+                  onChange={(e) => setCategorization({ ...categorization, color: e.target.value })}
+                  placeholder="e.g. Black, Beige, Navy"
+                  className="bg-zinc-950/80 border-white/10 focus:border-[#d4af37] text-foreground h-10 rounded-xl text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-[#d4af37]" />
+                  <span>Pattern / Fabric</span>
+                </Label>
+                <Input
+                  value={categorization.pattern || ''}
+                  onChange={(e) => setCategorization({ ...categorization, pattern: e.target.value })}
+                  placeholder="e.g. Solid, Striped, Leather"
+                  className="bg-zinc-950/80 border-white/10 focus:border-[#d4af37] text-foreground h-10 rounded-xl text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5 text-[#d4af37]" />
+                  <span>Formality</span>
+                </Label>
+                <Input
+                  value={categorization.formality || ''}
+                  onChange={(e) => setCategorization({ ...categorization, formality: e.target.value })}
+                  placeholder="e.g. Casual, Formal, Business"
+                  className="bg-zinc-950/80 border-white/10 focus:border-[#d4af37] text-foreground h-10 rounded-xl text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Season Chips */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Sun className="w-3.5 h-3.5 text-[#d4af37]" />
+                <span>Seasons</span>
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_SEASONS.map((season) => {
+                  const isSelected = (categorization.season ?? []).includes(season);
+                  return (
+                    <button
+                      key={season}
+                      type="button"
+                      onClick={() => toggleSeason(season)}
+                      className={cn(
+                        "px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer",
+                        isSelected
+                          ? "bg-gradient-to-r from-[#d4af37] to-[#b08f26] text-zinc-950 border-[#d4af37] font-bold"
+                          : "bg-zinc-950/60 border-white/10 text-zinc-400 hover:border-white/20 hover:text-white"
+                      )}
+                    >
+                      {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                      <span>{season}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Categories */}
-          <div className="space-y-4">
-            {categorization && (
-              <>
-                <Field label="Type" value={categorization.type} onChange={(v) => setCategorization(c => c ? {...c, type: v} : c)} />
-                <Field label="Color" value={categorization.color} onChange={(v) => setCategorization(c => c ? {...c, color: v} : c)} />
-                <Field label="Pattern" value={categorization.pattern} onChange={(v) => setCategorization(c => c ? {...c, pattern: v} : c)} />
-                <Field label="Formality" value={categorization.formality} onChange={(v) => setCategorization(c => c ? {...c, formality: v} : c)} />
-                <div>
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Season</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {(categorization.season ?? []).map((s) => (
-                      <Badge key={s} variant="outline" className="text-xs border-primary/20 bg-primary/5 text-primary">
-                        {s}
-                      </Badge>
-                    ))}
-                    {(!categorization.season || categorization.season.length === 0) && (
-                      <span className="text-xs text-muted-foreground/50">None detected</span>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            id="save-wardrobe-item"
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(201,169,110,0.2)] transition-all"
-          >
-            {saving ? (
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                Saving…
-              </span>
-            ) : (
-              '✓ Save to Wardrobe'
-            )}
-          </Button>
-          <Button variant="outline" onClick={handleReset} className="border-border hover:border-destructive/30 hover:text-destructive">
-            Start Over
-          </Button>
-        </div>
+        <Button
+          id="save-wardrobe-item"
+          onClick={handleSave}
+          disabled={saving || step === 'done'}
+          className="w-full h-12 bg-gradient-to-r from-[#8a6e3c] via-[#d4af37] to-[#8a6e3c] text-zinc-950 font-bold text-sm rounded-xl shadow-[0_0_20px_rgba(212,175,55,0.25)] hover:shadow-[0_0_30px_rgba(212,175,55,0.4)] transition-all flex items-center justify-center gap-2 mt-4"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Saving to Wardrobe…</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4" />
+              <span>Save to Digital Wardrobe</span>
+            </>
+          )}
+        </Button>
       </div>
     );
   }
 
-  // INPUT step
+  // ─────────────────────────────────────────────────────────
+  // RENDER: Input State (Single Central Container)
+  // ─────────────────────────────────────────────────────────
   return (
-    <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl shadow-black/50">
-      <Tabs defaultValue="upload" className="w-full">
-        <TabsList className="grid grid-cols-2 mb-8 bg-zinc-950/50 p-1 rounded-xl border border-white/5">
-          <TabsTrigger id="tab-upload" value="upload" className="rounded-lg py-2.5 data-[state=active]:bg-[#d4af37] data-[state=active]:text-black data-[state=active]:shadow-md font-medium text-muted-foreground transition-all">
-            Upload Image
-          </TabsTrigger>
-          <TabsTrigger id="tab-url" value="url" className="rounded-lg py-2.5 data-[state=active]:bg-[#d4af37] data-[state=active]:text-black data-[state=active]:shadow-md font-medium text-muted-foreground transition-all">
-            Product URL
-          </TabsTrigger>
-        </TabsList>
+    <div className="glass-card rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl backdrop-blur-2xl max-w-2xl w-full mx-auto space-y-6">
+      
+      {/* 1. HORIZONTAL TABS AT TOP OF CENTRAL CONTAINER */}
+      <div className="grid grid-cols-3 gap-2 bg-zinc-950/80 p-1.5 rounded-2xl border border-white/10 shadow-inner">
+        <button
+          type="button"
+          onClick={() => setActiveTab('photo')}
+          className={cn(
+            "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer",
+            activeTab === 'photo'
+              ? "bg-gradient-to-r from-[#d4af37] to-[#b08f26] text-zinc-950 font-bold shadow-lg shadow-amber-500/10"
+              : "text-zinc-400 hover:text-white"
+          )}
+        >
+          <Upload className="w-4 h-4" />
+          <span>Photo</span>
+        </button>
 
-        {/* Upload Tab */}
-        <TabsContent value="upload">
+        <button
+          type="button"
+          onClick={() => setActiveTab('link')}
+          className={cn(
+            "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer",
+            activeTab === 'link'
+              ? "bg-gradient-to-r from-[#d4af37] to-[#b08f26] text-zinc-950 font-bold shadow-lg shadow-amber-500/10"
+              : "text-zinc-400 hover:text-white"
+          )}
+        >
+          <LinkIcon className="w-4 h-4" />
+          <span>Link</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('bulk')}
+          className={cn(
+            "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer",
+            activeTab === 'bulk'
+              ? "bg-gradient-to-r from-[#d4af37] to-[#b08f26] text-zinc-950 font-bold shadow-lg shadow-amber-500/10"
+              : "text-zinc-400 hover:text-white"
+          )}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Bulk</span>
+        </button>
+      </div>
+
+      {/* 2. TAB CONTENT */}
+
+      {/* TAB A: PHOTO UPLOAD */}
+      {activeTab === 'photo' && (
+        <div className="space-y-6">
+          {/* WIDE RECTANGLE DROPZONE */}
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             className={cn(
-              'border-2 rounded-xl p-12 text-center cursor-pointer transition-all duration-300',
+              'border-2 border-dashed rounded-2xl w-full py-12 px-6 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group flex flex-col items-center justify-center',
               isDragging
-                ? 'border-solid border-[#d4af37] bg-zinc-800/50 shadow-[0_0_20px_rgba(212,175,55,0.15)]'
-                : 'border-dashed border-zinc-700 hover:border-zinc-500 hover:bg-zinc-900/30'
+                ? 'border-[#d4af37] bg-zinc-900/90 shadow-[0_0_30px_rgba(212,175,55,0.2)]'
+                : 'border-zinc-800 hover:border-[#d4af37]/60 bg-zinc-950/40 hover:bg-zinc-900/60'
             )}
           >
             <input
@@ -359,91 +530,198 @@ export function AddItemForm() {
               className="hidden"
               onChange={handleFileChange}
             />
-            <div className="text-5xl mb-4 text-muted-foreground/30">{isDragging ? '✦' : '↑'}</div>
-            <p className="text-foreground font-medium mb-1">
-              {isDragging ? 'Drop it here!' : 'Drag & drop your image'}
-            </p>
-            <p className="text-sm text-muted-foreground/60">or click to browse · PNG, JPG, WEBP</p>
-          </div>
 
-          {/* Error Debug Overlay */}
-        {errorStack && (
-          <div className="mt-6 p-4 bg-destructive/10 border border-destructive/30 rounded-xl overflow-auto max-h-64">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-destructive font-semibold text-sm">Debug Stack Trace</h3>
-              <Button variant="ghost" size="sm" onClick={() => setErrorStack(null)} className="h-6 text-xs">Clear</Button>
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#d4af37]/20 via-[#8a6e3c]/10 to-transparent border border-[#d4af37]/30 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300 shadow-xl">
+              <Upload className="w-7 h-7 text-[#d4af37]" />
             </div>
-            <pre className="text-xs text-destructive/80 whitespace-pre-wrap font-mono break-all">
-              {errorStack}
-            </pre>
+
+            <h3 className="text-base sm:text-lg font-bold text-foreground mb-1 font-serif">
+              {isDragging ? 'Drop your clothing photo here!' : 'Drag & drop your image or click to browse'}
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Supports PNG, JPG, or WEBP formats
+            </p>
+
+            <Button
+              type="button"
+              className="bg-zinc-900 border border-white/10 hover:border-[#d4af37]/40 text-foreground text-xs font-semibold rounded-xl px-6 py-2 h-9 shadow-md"
+            >
+              Browse Files
+            </Button>
           </div>
-        )}
 
-        <p className="text-xs text-muted-foreground/50 text-center mt-4">
-            ✦ Background will be removed automatically in your browser · No data sent to third parties
-          </p>
-        </TabsContent>
+          {/* HORIZONTAL BADGES UNDERNEATH DROPZONE */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="p-3 rounded-2xl bg-zinc-950/60 border border-white/5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[#d4af37] shrink-0">
+                <Scissors className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-foreground">Auto Background Removal</p>
+                <p className="text-[10px] text-muted-foreground">In-browser smart isolation</p>
+              </div>
+            </div>
 
-        {/* URL Tab */}
-        <TabsContent value="url">
-          <div className="space-y-4">
+            <div className="p-3 rounded-2xl bg-zinc-950/60 border border-white/5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[#d4af37] shrink-0">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-foreground">Gemini AI Tagging</p>
+                <p className="text-[10px] text-muted-foreground">Color, pattern, & style</p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-zinc-950/60 border border-white/5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[#d4af37] shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-foreground">100% Private</p>
+                <p className="text-[10px] text-muted-foreground">Processed safely</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB B: PRODUCT LINK */}
+      {activeTab === 'link' && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-2xl bg-zinc-950/60 border border-white/5 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="product-url" className="text-sm font-medium text-foreground/80">
-                Product URL
+              <Label htmlFor="product-url" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-[#d4af37]" />
+                <span>Product URL</span>
               </Label>
               <Input
                 id="product-url"
                 type="url"
-                placeholder="https://www.zara.com/product/..."
+                placeholder="https://www.zara.com/us/en/oversized-blazer-p0201..."
                 value={sourceUrl}
                 onChange={(e) => setSourceUrl(e.target.value)}
-                className="bg-input border-border text-foreground placeholder:text-muted-foreground/40 h-11"
+                className="bg-zinc-900 border-white/10 focus:border-[#d4af37] text-foreground placeholder:text-muted-foreground/40 h-12 rounded-xl text-sm"
               />
-              <p className="text-xs text-muted-foreground/50">
-                Works with Zara, H&M, ASOS, Uniqlo, and most major e-commerce sites
-              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-muted-foreground/70 uppercase tracking-wider font-semibold">Works with major stores:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {STORE_SUGGESTIONS.map((store) => (
+                  <Badge key={store} variant="outline" className="bg-zinc-900/60 border-white/10 text-zinc-400 text-[10px] px-2.5 py-1">
+                    {store}
+                  </Badge>
+                ))}
+              </div>
             </div>
 
             <Button
               id="scrape-url-btn"
               onClick={handleScrapeUrl}
               disabled={!sourceUrl.trim() || scrapeLoading}
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+              className="w-full h-11 bg-gradient-to-r from-[#8a6e3c] via-[#d4af37] to-[#8a6e3c] text-zinc-950 font-bold text-xs rounded-xl shadow-[0_0_20px_rgba(212,175,55,0.2)] hover:shadow-[0_0_30px_rgba(212,175,55,0.35)] transition-all flex items-center justify-center gap-2"
             >
               {scrapeLoading ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  Fetching product image…
-                </span>
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Fetching Image…</span>
+                </>
               ) : (
-                '→ Fetch & Process Image'
+                <>
+                  <span>Fetch & Process Image</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
               )}
             </Button>
           </div>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}
 
-// Small reusable editable field
-function Field({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div>
-      <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5 block">{label}</Label>
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-input border-border text-foreground h-9 text-sm"
-      />
+          {/* HORIZONTAL BADGES UNDERNEATH LINK TAB */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="p-3 rounded-2xl bg-zinc-950/60 border border-white/5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[#d4af37] shrink-0">
+                <Scissors className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-foreground">Auto Background Removal</p>
+                <p className="text-[10px] text-muted-foreground">In-browser smart isolation</p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-zinc-950/60 border border-white/5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[#d4af37] shrink-0">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-foreground">Gemini AI Tagging</p>
+                <p className="text-[10px] text-muted-foreground">Color, pattern, & style</p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-zinc-950/60 border border-white/5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[#d4af37] shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-foreground">100% Private</p>
+                <p className="text-[10px] text-muted-foreground">Processed safely</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB C: BULK UPLOAD */}
+      {activeTab === 'bulk' && (
+        <div className="space-y-6">
+          <BulkUploadForm />
+
+          {/* HORIZONTAL BADGES UNDERNEATH BULK TAB */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="p-3 rounded-2xl bg-zinc-950/60 border border-white/5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[#d4af37] shrink-0">
+                <Scissors className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-foreground">Auto Background Removal</p>
+                <p className="text-[10px] text-muted-foreground">In-browser smart isolation</p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-zinc-950/60 border border-white/5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[#d4af37] shrink-0">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-foreground">Gemini AI Tagging</p>
+                <p className="text-[10px] text-muted-foreground">Color, pattern, & style</p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-zinc-950/60 border border-white/5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[#d4af37] shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-foreground">100% Private</p>
+                <p className="text-[10px] text-muted-foreground">Processed safely</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Debug Overlay */}
+      {errorStack && (
+        <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-2xl overflow-auto max-h-48">
+          <div className="flex justify-between items-center mb-2">
+            <h4 className="text-destructive font-semibold text-xs">Error Debug Log</h4>
+            <Button variant="ghost" size="sm" onClick={() => setErrorStack(null)} className="h-6 text-[10px]">Clear</Button>
+          </div>
+          <pre className="text-[11px] text-destructive/80 font-mono whitespace-pre-wrap break-all">
+            {errorStack}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }
